@@ -1,0 +1,156 @@
+import React, { createContext, useContext, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
+
+export interface BrandConfig {
+    name: string;           // e.g. "Aura Studio" or "Obsidian Detailing"
+    upper: string;          // e.g. "AURA STUDIO" or "OBSIDIAN DETAILING"
+    shortName: string;      // e.g. "Aura" or "Obsidian"
+    city: string;           // e.g. "Los Angeles" or "Miami"
+    locationTag: string;    // e.g. "EST. 2024 // CLEANROOM FACILITY • USA"
+    email: string;          // e.g. "concierge@aurastudio.com"
+    isCustomClient: boolean;
+    clientRaw: string | null;
+}
+
+const DEFAULT_BRAND_NAME = "Aura Studio";
+const DEFAULT_CITY = "Los Angeles";
+const DEFAULT_LOCATION_TAG = "EST. 2024 // CLEANROOM DETAILING FACILITY • USA";
+
+const BrandContext = createContext<BrandConfig>({
+    name: DEFAULT_BRAND_NAME,
+    upper: DEFAULT_BRAND_NAME.toUpperCase(),
+    shortName: "Aura",
+    city: DEFAULT_CITY,
+    locationTag: DEFAULT_LOCATION_TAG,
+    email: "concierge@aurastudio.com",
+    isCustomClient: false,
+    clientRaw: null,
+});
+
+function sanitizeBrandName(raw: string): string {
+    let decoded = raw;
+    try {
+        decoded = decodeURIComponent(raw);
+    } catch {
+        // fallback
+    }
+    const cleaned = decoded.replace(/[+_-]/g, " ").trim();
+    return cleaned
+        .split(" ")
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+}
+
+function slugify(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const location = useLocation();
+
+    const brandConfig = useMemo<BrandConfig>(() => {
+        let searchStr = location.search;
+        if (!searchStr && location.hash && location.hash.includes("?")) {
+            searchStr = location.hash.substring(location.hash.indexOf("?"));
+        }
+        if (!searchStr && typeof window !== "undefined" && window.location.href.includes("?")) {
+            searchStr = window.location.href.substring(window.location.href.indexOf("?"));
+        }
+
+        const params = new URLSearchParams(searchStr);
+        const clientParam =
+            params.get("client") ||
+            params.get("brand") ||
+            params.get("name") ||
+            params.get("studio") ||
+            params.get("shop") ||
+            params.get("prospect");
+
+        const cityParam = params.get("city") || params.get("location") || params.get("place");
+
+        if (clientParam && clientParam.trim().length > 0) {
+            const sanitizedName = sanitizeBrandName(clientParam);
+            const words = sanitizedName.split(" ");
+            const shortName = words[0] || sanitizedName;
+            const city = cityParam ? sanitizeBrandName(cityParam) : "Metropolitan Facility";
+            const locationTag = cityParam
+                ? `EST. 2024 // ${city.toUpperCase()} LAB`
+                : "EST. 2024 // CLEANROOM FACILITY • BY APPOINTMENT";
+            const slug = slugify(sanitizedName);
+            const email = `concierge@${slug || "aurastudio"}.com`;
+
+            return {
+                name: sanitizedName,
+                upper: sanitizedName.toUpperCase(),
+                shortName,
+                city,
+                locationTag,
+                email,
+                isCustomClient: true,
+                clientRaw: clientParam.trim(),
+            };
+        }
+
+        return {
+            name: DEFAULT_BRAND_NAME,
+            upper: DEFAULT_BRAND_NAME.toUpperCase(),
+            shortName: "Aura",
+            city: DEFAULT_CITY,
+            locationTag: DEFAULT_LOCATION_TAG,
+            email: "concierge@aurastudio.com",
+            isCustomClient: false,
+            clientRaw: null,
+        };
+    }, [location.search, location.hash]);
+
+    useEffect(() => {
+        if (brandConfig.isCustomClient) {
+            document.title = `${brandConfig.name} // Precision Detailing & Paint Preservation Lab`;
+        } else {
+            document.title = "AURA // Precision Detailing & Paint Preservation Lab";
+        }
+
+        // Dynamically update favicon based on brand initial
+        try {
+            const initial = (brandConfig.shortName || brandConfig.name || "A").charAt(0).toUpperCase();
+            let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+            if (!link) {
+                link = document.createElement("link");
+                link.rel = "icon";
+                document.head.appendChild(link);
+            }
+
+            if (initial === "A" && !brandConfig.isCustomClient) {
+                link.href = "/favicon.svg";
+                link.type = "image/svg+xml";
+            } else {
+                const customSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="neonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="100" fill="#030005" />
+  <rect x="16" y="16" width="480" height="480" rx="90" fill="none" stroke="url(#neonGrad)" stroke-width="12" />
+  <text x="256" y="355" font-family="'Syne', 'Space Grotesk', system-ui, sans-serif" font-size="280" font-weight="900" font-style="italic" fill="#ffffff" text-anchor="middle">${initial}</text>
+  <circle cx="395" cy="140" r="22" fill="url(#neonGrad)" />
+  <circle cx="395" cy="140" r="10" fill="#ffffff" />
+</svg>`;
+                link.href = `data:image/svg+xml;utf8,${encodeURIComponent(customSvg)}`;
+                link.type = "image/svg+xml";
+            }
+        } catch {
+            // Non-critical fallback
+        }
+    }, [brandConfig]);
+
+    return (
+        <BrandContext.Provider value={brandConfig}>
+            {children}
+        </BrandContext.Provider>
+    );
+};
+
+export const useBrand = () => useContext(BrandContext);
