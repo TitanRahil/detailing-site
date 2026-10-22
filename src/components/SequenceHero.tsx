@@ -140,6 +140,15 @@ export default function SequenceHero() {
                     try {
                         renderFrame(bestFrame);
                         currentFrame.current = bestFrame;
+
+                        // On mobile, dynamically transition from left-aligned to perfectly centered
+                        if (isMobile && canvasRef.current) {
+                            const progress = bestFrame / Math.max(1, frameCount - 1);
+                            const t = Math.max(0, Math.min(1, (progress - 0.55) / 0.45));
+                            const smooth = t * t * (3 - 2 * t);
+                            const xPercent = smooth * 50;
+                            canvasRef.current.style.objectPosition = xPercent + '% center';
+                        }
                     } catch (e) {}
                 }
             }
